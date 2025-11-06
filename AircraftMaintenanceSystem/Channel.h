@@ -4,6 +4,11 @@
 #include <windows.h>
 #include "Semaphore.h"
 
+struct Message {
+	int a;
+	int b;
+};
+
 /*
 Класс для реализации Канала, через обычные семафоры
 */
