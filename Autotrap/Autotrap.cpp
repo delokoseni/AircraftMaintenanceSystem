@@ -3,18 +3,9 @@
 #include <ctime>
 #include <Windows.h>
 #include "Semaphore.h"
+#include "AircraftMaintenanceSystem.h"
 
 bool systemRunning = true;
-Semaphore printSem("PrintSem", 1);
-
-static void Log(const char* component, const std::string& text) {
-    printSem.P();
-    auto t = std::time(nullptr);
-    std::tm tm;
-    localtime_s(&tm, &t);
-    std::cout << "[" << std::put_time(&tm, "%H:%M:%S") << "] [" << component << "] " << text << '\n';
-    printSem.V();
-}
 
 int main() {
     SetConsoleCP(1251);

@@ -144,6 +144,7 @@
     <ClCompile Include="Semaphore.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AircraftMaintenanceSystem.h" />
     <ClInclude Include="Channel.h" />
     <ClInclude Include="Semaphore.h" />
   </ItemGroup>
