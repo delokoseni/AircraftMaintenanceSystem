@@ -104,6 +104,8 @@ DWORD WINAPI ControlRoomThread(PVOID p) {
     Channel toAirplane("ControlRoomToAirplane");
     Channel fromRunwaySensor("RunwaySensorToControlRoom");
     Channel toRunwaySensor("ControlRoomToRunwaySensor");
+    Semaphore autotrapSem("AutotrapSem", 0);
+    Semaphore loaderSem("LoaderSem", 0);
     while (systemRunning) {
         int  airplaneID = fromAirplane.get();
         {
@@ -137,12 +139,16 @@ DWORD WINAPI ControlRoomThread(PVOID p) {
             toAirplane.put(1);
             int isLanded = fromAirplane.get();
             if (isLanded == 0) {
-                {
-                    std::ostringstream ss;
-                    ss << "Приземлился самолет, отправляю сигналы автотрапу и погрузчику.";
-                    Log("Диспетчерская", ss.str(), isLanded);
-                }
+                Log("Диспетчерская", "Приземлился самолет, отправляю сигнал автотрапу.", airplaneID);
+                autotrapSem.V();  // Разрешаем работу автотрапа
 
+                autotrapSem.P();  // Ждем пока автотрап сообщит, что закончил
+
+                Log("Диспетчерская", "Автотрап завершил обслуживание, разрешаю работу погрузчика.", airplaneID);
+                loaderSem.V();    // Разрешаем работу погрузчика
+
+                loaderSem.P();    // Ждем окончания погрузки
+                Log("Диспетчерская", "Погрузчик завершил обслуживание самолета.", airplaneID);
             }
         }
         if (!systemRunning) break;
@@ -176,18 +182,30 @@ DWORD WINAPI RunwaySensorThread(PVOID p) {
 
 
 DWORD WINAPI AutotrapThread(PVOID p) {
+    Semaphore autotrapSem("AutotrapSem", 0);
     Log("Автотрап", "Запущен");
     while (systemRunning) {
+        autotrapSem.P();
         if (!systemRunning) break;
+        Log("Автотрап", "Начинаю обслуживание самолета...");
+        Sleep(2000); 
+        Log("Автотрап", "Обслуживание завершено.");
+        autotrapSem.V();
     }
     Log("Автотрап", "Конец работы.");
     return 0;
 }
 
 DWORD WINAPI LoaderThread(PVOID p) {
+    Semaphore loaderSem("LoaderSem", 0);
     Log("Погрузчик", "Запущен");
     while (systemRunning) {
+        loaderSem.P();
         if (!systemRunning) break;
+        Log("Погрузчик", "Начинаю обслуживание самолета...");
+        Sleep(2000); 
+        Log("Погрузчик", "Обслуживание завершено.");
+        loaderSem.V();
     }
     Log("Погрузчик", "Конец работы.");
     return 0;

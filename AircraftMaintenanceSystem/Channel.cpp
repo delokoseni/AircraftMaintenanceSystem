@@ -14,7 +14,6 @@ Channel::Channel(const char* name) {
     freeSem = Semaphore(semFreeName, 1);
     emptySem = Semaphore(semEmptyName, 0);
 
-    // Теперь создаём общую память с ИМЕНЕМ самого канала, а не семафора
     wchar_t wname[256];
     MultiByteToWideChar(CP_ACP, 0, name, -1, wname, 256);
 
@@ -31,7 +30,6 @@ Channel::Channel(const char* name) {
         buffer = NULL;
     }
 }
-
 
 //метод для того, чтобы положить в канал данные
 void Channel::put(int data) {
