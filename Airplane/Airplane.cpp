@@ -5,6 +5,7 @@
 #include "Channel.h"
 #include "Semaphore.h"
 #include "AircraftMaintenanceSystem.h"
+#include "GlobalIds.h"
 
 bool systemRunning = true;
 
@@ -16,9 +17,9 @@ int main() {
     Channel toControlRoom("AirplaneToControlRoom");
     Channel fromControlRoom("ControlRoomToAirplane");
 
-    unsigned int airplaneID = 1;
-
     while (systemRunning) {
+        unsigned int airplaneID = GetNextAirplaneId();
+
         Log("Самолет", "Запрашиваю посадку", airplaneID);
         toControlRoom.put(airplaneID);
         int result = fromControlRoom.get();

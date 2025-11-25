@@ -24,6 +24,9 @@
     <ClCompile Include="Channel.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="GlobalIds.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Semaphore.h">
@@ -34,6 +37,9 @@
     </ClInclude>
     <ClInclude Include="AircraftMaintenanceSystem.h">
       <Filter>Исходные файлы</Filter>
+    </ClInclude>
+    <ClInclude Include="GlobalIds.h">
+      <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
