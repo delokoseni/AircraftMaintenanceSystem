@@ -15,6 +15,7 @@ int main() {
     Log("Самолет", "Запущен");
 
     Channel toControlRoom("AirplaneToControlRoom");
+    Channel toControlRoomLandedMessage("AirplaneToControlRoomLandedMessage");
     Channel fromControlRoom("ControlRoomToAirplane");
 
     while (systemRunning) {
@@ -29,7 +30,7 @@ int main() {
         }
         else {
             Log("Самолет", "Посадка разрешена, иду на посадку", airplaneID);
-            toControlRoom.put(0);
+            toControlRoomLandedMessage.put(0);
             airplaneID++;
         }
 

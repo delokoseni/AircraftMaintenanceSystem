@@ -14,6 +14,7 @@ int main() {
     Log("Диспетчерская", "Запущена");
 
     Channel fromAirplane("AirplaneToControlRoom");
+    Channel fromAirplaneLandedMessage("AirplaneToControlRoomLandedMessage");
     Channel toAirplane("ControlRoomToAirplane");
     Channel fromRunwaySensor("RunwaySensorToControlRoom");
     Channel toRunwaySensor("ControlRoomToRunwaySensor");
@@ -36,7 +37,7 @@ int main() {
         else {
             Log("Диспетчерская", "Посадка разрешена", airplaneID);
             toAirplane.put(1);
-            int landed = fromAirplane.get();
+            int landed = fromAirplaneLandedMessage.get();
             if (landed == 0) {
                 Log("Диспетчерская", "Самолет приземлился, запускаю автотрап", airplaneID);
                 autotrapSem.V();
