@@ -4,8 +4,6 @@
 
 struct GlobalCounters {
     unsigned int airplaneCounter;
-    unsigned int dispatcherCounter;
-    unsigned int sensorCounter;
 };
 
 static HANDLE gMem = NULL;
@@ -31,13 +29,8 @@ static void InitGlobal()
     }
 
     // »нициализаци€ только при первом создании
-    // ћожно проверить GetLastError() после CreateFileMappingW:
-    // если ERROR_ALREADY_EXISTS Ц не трогаем
-    // но дл€ простоты: если всЄ нули Ц проинициализируем
-    if (gCounters->airplaneCounter == 0 && gCounters->dispatcherCounter == 0 && gCounters->sensorCounter == 0) {
+    if (gCounters->airplaneCounter == 0) {
         gCounters->airplaneCounter = 0;
-        gCounters->dispatcherCounter = 0;
-        gCounters->sensorCounter = 0;
     }
 }
 
@@ -51,5 +44,4 @@ static unsigned int Next(unsigned int GlobalCounters::* field)
 }
 
 unsigned int GetNextAirplaneId() { return Next(&GlobalCounters::airplaneCounter); }
-unsigned int GetNextDispatcherId() { return Next(&GlobalCounters::dispatcherCounter); }
-unsigned int GetNextRunwaySensorId() { return Next(&GlobalCounters::sensorCounter); }
+
