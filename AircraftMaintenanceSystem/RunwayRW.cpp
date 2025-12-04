@@ -1,135 +1,86 @@
 #include "RunwayRW.h"
+#include <windows.h>
 #include <iostream>
-#include <chrono>
-#include <cstring>
 
+static HANDLE hMap = NULL;
+static RunwayState* shared = NULL;
 
-// Структура в общей памяти; содержит state и счётчик читателей
-struct SharedRunway {
-	RunwayState state;
-	int readCount;
-};
+static HANDLE hMutexWrite = NULL;
+static HANDLE hMutexRCount = NULL;
+static HANDLE hSemReaders = NULL;
 
-
-static HANDLE gMem = NULL;
-static SharedRunway* gShared = nullptr;
-
-// Семафоры
-static Semaphore gMutex(RUNWAY_MUTEX_NAME, 1); // защитa readCount
-static Semaphore gRoomEmpty(RUNWAY_ROOMEMPTY_NAME, 1); // для писателей (1 = свободно)
-static Semaphore gBaton(RUNWAY_BATON_NAME, 1); // эстафета (инициално 1)
-
+static int* readerCount = nullptr;
 
 bool InitRunwayRW() {
-	if (gShared != nullptr) return true;
+    // Shared memory (RunwayState + readerCount)
+    hMap = OpenFileMappingW(FILE_MAP_ALL_ACCESS, FALSE, L"RunwaySharedMem");
+    if (!hMap)
+        hMap = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0,
+            sizeof(RunwayState) + sizeof(int),
+            L"RunwaySharedMem");
 
+    if (!hMap) return false;
 
-	// Создаём/открываем память
-	gMem = OpenFileMappingW(FILE_MAP_ALL_ACCESS, FALSE, RUNWAY_SHARED_MEM_NAME);
-	if (gMem == NULL) {
-		gMem = CreateFileMappingW(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, sizeof(SharedRunway), RUNWAY_SHARED_MEM_NAME);
-		if (!gMem) {
-			DWORD err = GetLastError();
-			std::cerr << "RunwayRW: CreateFileMapping failed: " << err << std::endl;
-			return false;
-		}
-	}
+    void* base = MapViewOfFile(hMap, FILE_MAP_ALL_ACCESS, 0, 0,
+        sizeof(RunwayState) + sizeof(int));
+    if (!base) return false;
 
+    shared = reinterpret_cast<RunwayState*>(base);
+    readerCount = reinterpret_cast<int*>((char*)base + sizeof(RunwayState));
 
-	gShared = (SharedRunway*)MapViewOfFile(gMem, FILE_MAP_ALL_ACCESS, 0, 0, sizeof(SharedRunway));
-	if (!gShared) {
-		std::cerr << "RunwayRW: MapViewOfFile failed" << std::endl;
-		return false;
-	}
+    // Semaphores & mutexes
+    hMutexWrite = CreateMutexW(NULL, FALSE, L"RunwayWriteMutex");
+    hMutexRCount = CreateMutexW(NULL, FALSE, L"RunwayRCountMutex");
+    hSemReaders = CreateSemaphoreW(NULL, 1, 1, L"RunwayReadersBlock");
 
-
-	// Инициализация при первом создании (мы предполагаем что нули уже)
-	// Но чтобы быть уверенными — если readCount содержит мусор, установим нули
-	// (это безопасно, если мы только что создали память)
-	// Признак того что память новая — попробуем проверить timestamp
-	if (gShared->readCount < 0 || gShared->readCount > 1000000) {
-		gShared->readCount = 0;
-	}
-
-
-	return true;
+    return true;
 }
 
 void CloseRunwayRW() {
-	if (gShared) {
-		UnmapViewOfFile(gShared);
-		gShared = nullptr;
-	}
-	if (gMem) {
-		CloseHandle(gMem);
-		gMem = NULL;
-	}
+    if (shared) UnmapViewOfFile(shared);
+    if (hMap) CloseHandle(hMap);
+    if (hMutexWrite) CloseHandle(hMutexWrite);
+    if (hMutexRCount) CloseHandle(hMutexRCount);
+    if (hSemReaders) CloseHandle(hSemReaders);
 }
 
+// ---------------------------------------------------------------------------
+// READER — диспетчерская
+// ---------------------------------------------------------------------------
+bool ReadRunwayState(RunwayState& out) {
+    WaitForSingleObject(hMutexRCount, INFINITE);
 
-bool ReadRunwayState(RunwayState& outState) {
-	if (!InitRunwayRW()) return false;
+    (*readerCount)++;
+    if (*readerCount == 1)
+        WaitForSingleObject(hSemReaders, INFINITE);
 
+    ReleaseMutex(hMutexRCount);
 
-	// Этап входа читателя (читатели имеют приоритет)
-	// Захватываем мьютекс для readCount
-	gMutex.P();
-	gShared->readCount++;
-	if (gShared->readCount == 1) {
-		// первый читатель блокирует писателей
-		gRoomEmpty.P();
-	}
-	gMutex.V();
+    // ---- ЧТЕНИЕ ----
+    out = *shared;
 
+    // ---- END READ ----
+    WaitForSingleObject(hMutexRCount, INFINITE);
 
-	// Снимаем snapshot
-	memcpy(&outState, &gShared->state, sizeof(RunwayState));
+    (*readerCount)--;
+    if (*readerCount == 0)
+        ReleaseSemaphore(hSemReaders, 1, NULL);
 
+    ReleaseMutex(hMutexRCount);
 
-	// Выход читателя
-	gMutex.P();
-	gShared->readCount--;
-	if (gShared->readCount == 0) {
-		// последний читатель освобождает писателей
-		gRoomEmpty.V();
-	}
-	gMutex.V();
-
-
-	// Передача эстафеты (простая форма): вручим baton
-	// (для этого реализован именованный семафор gBaton; но здесь мы просто V() — если кто-то ждет, он проснется)
-	gBaton.V();
-
-
-	return true;
+    return true;
 }
 
-bool WriteRunwayState(const RunwayState& newState) {
-	if (!InitRunwayRW()) return false;
+// ---------------------------------------------------------------------------
+// WRITER — датчики ВПП
+// ---------------------------------------------------------------------------
+bool WriteRunwayState(const RunwayState& st) {
+    WaitForSingleObject(hMutexWrite, INFINITE);
+    WaitForSingleObject(hSemReaders, INFINITE);
 
+    *shared = st;
 
-	// Для писателя: ждём пока нет активных читателей (roomEmpty)
-	// Также экономим ресурс: блокируем батон, чтобы писатели шли по порядку
-
-
-	// Предполагаем: gRoomEmpty имеет значение 1, P() заблокирует доступ
-	gRoomEmpty.P(); // теперь писатель эксклюзивно владеет доступом
-
-
-	// Записываем
-	memcpy(&gShared->state, &newState, sizeof(RunwayState));
-
-
-	// Обновим timestamp, если нужно (поле newState уже содержит timestamp)
-
-
-	// Освобождаем комнату для читателей/писателей
-	gRoomEmpty.V();
-
-
-	// Передача эстафеты
-	gBaton.V();
-
-
-	return true;
+    ReleaseSemaphore(hSemReaders, 1, NULL);
+    ReleaseMutex(hMutexWrite);
+    return true;
 }

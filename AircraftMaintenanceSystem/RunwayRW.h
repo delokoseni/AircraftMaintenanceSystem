@@ -1,23 +1,18 @@
 #pragma once
-#include "RunwayState.h"
-#include "Semaphore.h"
 #include <Windows.h>
+#include <string>
 
+struct RunwayState {
+    int surfaceCondition; // 1 - good, 0 - bad
+    int visibility;       // 0..100
+    float temperature;    // ambient temperature
+    long timestamp;       // epoch time
+};
 
-// Имена семафоров 
-constexpr char RUNWAY_MUTEX_NAME[] = "Runway_mutex";
-constexpr char RUNWAY_ROOMEMPTY_NAME[] = "Runway_roomEmpty";
-constexpr char RUNWAY_BATON_NAME[] = "Runway_baton";
-
-
-// API
+// Инициализация RW
 bool InitRunwayRW();
 void CloseRunwayRW();
 
-
-// Читает snapshot состояния (не блокирует других читателей)
-bool ReadRunwayState(RunwayState& outState);
-
-
-// Пишет новое состояние
-bool WriteRunwayState(const RunwayState& newState);
+// Чтение/запись
+bool ReadRunwayState(RunwayState& out);
+bool WriteRunwayState(const RunwayState& st);

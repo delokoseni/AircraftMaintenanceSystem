@@ -1,59 +1,60 @@
 ﻿#include <iostream>
-#include <iomanip>
-#include <ctime>
 #include <Windows.h>
+#include "Channel.h"
+#include "Semaphore.h"
 #include "AircraftMaintenanceSystem.h"
 #include "RunwayRW.h"
 
-
 bool systemRunning = true;
 
-
 int main() {
-	SetConsoleCP(1251);
-	SetConsoleOutputCP(1251);
-	Log("Диспетчерская", "Запущена");
+    SetConsoleCP(1251);
+    SetConsoleOutputCP(1251);
 
+    Log("Диспетчерская", "Запущена");
 
-	// Семафоры для автотрапа и погрузчика оставлены как раньше
-	Semaphore autotrapSem("AutotrapSem", 0);
-	Semaphore loaderSem("LoaderSem", 0);
+    Channel fromAirplane("AirplaneToControlRoom");
+    Channel fromAirplaneLandedMessage("AirplaneToControlRoomLandedMessage");
+    Channel toAirplane("ControlRoomToAirplane");
 
+    Semaphore autotrapSem("AutotrapSem", 0);
+    Semaphore loaderSem("LoaderSem", 0);
 
-	while (systemRunning) {
-		RunwayState rs;
-		if (!ReadRunwayState(rs)) {
-			Log("Диспетчерская", "Не удалось прочитать состояние ВПП");
-			Sleep(1000);
-			continue;
-		}
+    // Инициализация читателя
+    InitRunwayRW();
 
+    while (systemRunning) {
+        int airplaneID = fromAirplane.get();
+        Log("Диспетчерская", "Приняла запрос на посадку", airplaneID);
 
-		// Логика принятия решения
-		Log("Диспетчерская", std::string("Проверка ВПП: surface=" + std::to_string(rs.surfaceCondition) + ", vis=" + std::to_string(rs.visibility)));
+        RunwayState st;
+        ReadRunwayState(st);
 
+        // Используем surfaceCondition
+        if (st.surfaceCondition == 1) {
+            Log("Диспетчерская", "ВПП в хорошем состоянии, посадка разрешена", airplaneID);
+            toAirplane.put(1);
 
-		if (rs.surfaceCondition == 1 && rs.visibility > 30) {
-			Log("Диспетчерская", "Посадка разрешена");
-			// Ждём сообщение о приземлении из канала в старом варианте — оставляем упрощенно
-			// Симуляция: если пришёл приземление — запускаем автотрап и loader
-			// Для демонстрации — сразу запускаем сервисы
-			Log("Диспетчерская", "Самолет приземлился, запускаю автотрап");
-			autotrapSem.V();
-			autotrapSem.P();
-			Log("Диспетчерская", "Автотрап завершил, запускаю погрузчик");
-			loaderSem.V();
-			loaderSem.P();
-		}
-		else {
-			Log("Диспетчерская", "Посадка запрещена");
-		}
+            int landed = fromAirplaneLandedMessage.get();
+            if (landed == 0) {
+                Log("Диспетчерская", "Самолет приземлился, запускаю автотрап", airplaneID);
+                autotrapSem.V();
+                autotrapSem.P();
 
+                Log("Диспетчерская", "Запускаю погрузчик", airplaneID);
+                loaderSem.V();
+                loaderSem.P();
+            }
+        }
+        else {
+            Log("Диспетчерская", "ВПП в плохом состоянии, посадка запрещена", airplaneID);
+            toAirplane.put(0);
+        }
 
-		Sleep(1000);
-	}
+        Sleep(600);
+    }
 
-
-	Log("Диспетчерская", "Конец работы.");
-	return 0;
+    CloseRunwayRW();
+    Log("Диспетчерская", "Конец работы.");
+    return 0;
 }

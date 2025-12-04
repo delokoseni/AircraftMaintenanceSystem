@@ -44,9 +44,6 @@
     <ClInclude Include="GlobalIds.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="RunwayState.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="RunwayRW.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
